@@ -2,8 +2,9 @@ import socket
 import json
 import base64
 import logging
+import os
 
-server_address=('0.0.0.0',7777)
+server_address=('172.16.16.101', 6666)
 
 def send_command(command_str=""):
     global server_address
@@ -12,12 +13,13 @@ def send_command(command_str=""):
     logging.warning(f"connecting to {server_address}")
     try:
         logging.warning(f"sending message ")
+        command_str = json.dumps(command_str) + '\r\n\r\n'
         sock.sendall(command_str.encode())
         # Look for the response, waiting until socket is done (no more data)
         data_received="" #empty string
         while True:
             #socket does not receive all data at once, data comes in part, need to be concatenated at the end of process
-            data = sock.recv(16)
+            data = sock.recv(4096)
             if data:
                 #data is not empty, concat with previous content
                 data_received += data.decode()
@@ -37,7 +39,10 @@ def send_command(command_str=""):
 
 
 def remote_list():
-    command_str=f"LIST"
+    command_str={
+        'command': 'LIST',
+        'params': []
+    }
     hasil = send_command(command_str)
     if (hasil['status']=='OK'):
         print("daftar file : ")
@@ -49,7 +54,10 @@ def remote_list():
         return False
 
 def remote_get(filename=""):
-    command_str=f"GET {filename}"
+    command_str={
+        'command': 'GET',
+        'params': [filename]
+    }
     hasil = send_command(command_str)
     if (hasil['status']=='OK'):
         #proses file dalam bentuk base64 ke bentuk bytes
@@ -62,10 +70,85 @@ def remote_get(filename=""):
     else:
         print("Gagal")
         return False
+    
+def remote_upload(filename=""):
+    if not os.path.exists(filename):
+        print(f"File '{filename}' tidak ditemukan.")
+        return False
+
+    try:
+        with open(filename, "rb") as fp:
+            file_content = fp.read()
+        encoded_content = base64.b64encode(file_content).decode('utf-8')
+
+        missing_padding = len(encoded_content) % 4
+        if missing_padding != 0:
+            encoded_content += '=' * (4 - missing_padding)
+
+        command_str = {
+            'command': 'UPLOAD',
+            'params': [filename, encoded_content]
+        }
+        hasil = send_command(command_str)
+        if hasil['status'] == 'OK':
+            print(f"File '{filename}' berhasil diupload.")
+            return True
+        else:
+            print("Gagal upload.")
+            return False
+    except Exception as e:
+        print(f"Error saat upload: {e}")
+        return False
+    
+def remote_delete(filename=""):
+    command_str = {
+        'command': 'DELETE',
+        'params': [filename]
+    }
+    hasil = send_command(command_str)
+    if hasil['status'] == 'OK':
+        print(f"File '{filename}' berhasil dihapus.")
+        return True
+    else:
+        print("Gagal hapus.")
+        return False
 
 
-if __name__=='__main__':
-    server_address=('172.16.16.101',6666)
-    remote_list()
-    remote_get('donalbebek.jpg')
+import shlex
 
+if __name__ == '__main__':
+
+    while True:
+        try:
+            perintah = input("Masukkan Perintah(LIST, DELETE ,GET, UPLOAD) :  ").strip()
+            if not perintah:
+                continue
+
+            tokens = shlex.split(perintah)
+            cmd = tokens[0].upper()
+
+            if cmd == 'EXIT':
+                print("Keluar dari aplikasi.")
+                break
+            elif cmd == 'LIST':
+                remote_list()
+            elif cmd == 'GET':
+                if len(tokens) >= 2:
+                    remote_get(tokens[1])
+                else:
+                    print("Format: GET <namafile>")
+            elif cmd == 'UPLOAD':
+                if len(tokens) >= 2:
+                    remote_upload(tokens[1])
+                else:
+                    print("Format: UPLOAD <namafile>")
+            elif cmd == 'DELETE':
+                if len(tokens) >= 2:
+                    remote_delete(tokens[1])
+                else:
+                    print("Format: DELETE <namafile>")
+            else:
+                print("Perintah tidak dikenal.")
+        except KeyboardInterrupt:
+            print("\nKeluar dari aplikasi.")
+            break
