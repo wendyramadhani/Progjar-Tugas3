@@ -1,41 +1,69 @@
-FILE SERVER
-TUJUAN: melayani client dalam request file server
+FILE SERVER PROTOCOL
+TUJUAN: Melayani client dalam request file server (daftar file, ambil file, upload, hapus file)
 
 ATURAN PROTOKOL:
-- client harus mengirimkan request dalam bentuk string
-- string harus dalam format
-  REQUEST spasi PARAMETER
-- PARAMETER dapat berkembang menjadi PARAMETER1 spasi PARAMETER2 dan seterusnya
+- Client mengirimkan request dalam bentuk string JSON, misal:
+    {"command": "LIST", "params": []}
+    {"command": "GET", "params": ["namafile.txt"]}
+    {"command": "UPLOAD", "params": ["namafile.txt", "<filedata_base64>"]}
+    {"command": "DELETE", "params": ["namafile.txt"]}
+- Setiap request diakhiri dengan karakter "\r\n\r\n"
+- Response dari server juga dalam bentuk JSON, diakhiri dengan "\r\n\r\n"
+- Semua komunikasi menggunakan TCP socket
 
-REQUEST YANG DILAYANI:
-- informasi umum:
-  * Jika request tidak dikenali akan menghasilkan pesan
-    - status: ERROR
-    - data: request tidak dikenali
-  * Semua result akan diberikan dalam bentuk JSON dan diakhiri
-    dengan character ascii code #13#10#13#10 atau "\r\n\r\n"
+FORMAT REQUEST:
+- JSON object dengan field:
+    - "command": Nama perintah (LIST, GET, UPLOAD, DELETE)
+    - "params": List parameter sesuai perintah
+
+FORMAT RESPONSE:
+- JSON object dengan field:
+    - "status": "OK" jika berhasil, "ERROR" jika gagal
+    - Data lain sesuai perintah
+
+DAFTAR REQUEST YANG DILAYANI:
 
 LIST
-* TUJUAN: untuk mendapatkan daftar seluruh file yang dilayani oleh file server
-* PARAMETER: tidak ada
-* RESULT:
-- BERHASIL:
-  - status: OK
-  - data: list file
-- GAGAL:
-  - status: ERROR
-  - data: pesan kesalahan
+* TUJUAN: Mendapatkan daftar seluruh file yang tersedia di server
+* REQUEST:
+    {"command": "LIST", "params": []}
+* RESPONSE:
+    - BERHASIL:
+        {"status": "OK", "data": ["file1.txt", "file2.jpg", ...]}
+    - GAGAL:
+        {"status": "ERROR", "data": "<pesan kesalahan>"}
 
 GET
-* TUJUAN: untuk mendapatkan isi file dengan menyebutkan nama file dalam parameter
-* PARAMETER:
-  - PARAMETER1 : nama file
-* RESULT:
-- BERHASIL:
-  - status: OK
-  - data_namafile : nama file yang diminta
-  - data_file : isi file yang diminta (dalam bentuk base64)
-- GAGAL:
-  - status: ERROR
-  - data: pesan kesalahan
+* TUJUAN: Mengambil isi file dari server
+* REQUEST:
+    {"command": "GET", "params": ["namafile.txt"]}
+* RESPONSE:
+    - BERHASIL:
+        {"status": "OK", "data_namafile": "namafile.txt", "data_file": "<base64_file_content>"}
+    - GAGAL:
+        {"status": "ERROR", "data": "<pesan kesalahan>"}
 
+UPLOAD
+* TUJUAN: Mengupload file ke server
+* REQUEST:
+    {"command": "UPLOAD", "params": ["namafile.txt", "<base64_file_content>"]}
+* RESPONSE:
+    - BERHASIL:
+        {"status": "OK", "data": "namafile.txt uploaded"}
+    - GAGAL:
+        {"status": "ERROR", "data": "<pesan kesalahan>"}
+
+DELETE
+* TUJUAN: Menghapus file di server
+* REQUEST:
+    {"command": "DELETE", "params": ["namafile.txt"]}
+* RESPONSE:
+    - BERHASIL:
+        {"status": "OK", "data": "namafile.txt deleted"}
+    - GAGAL:
+        {"status": "ERROR", "data": "<pesan kesalahan>"}
+
+CATATAN:
+- Semua data file dikirim dalam bentuk base64 string.
+- Jika command tidak dikenali, server akan membalas:
+    {"status": "ERROR", "data": "request tidak dikenali"}
